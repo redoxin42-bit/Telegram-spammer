@@ -1,22 +1,19 @@
 import asyncio
 import random
 import os
-import json
+import logging
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from telethon import TelegramClient, events
 from telethon.errors import FloodWaitError
 
-# --- КОНФИГУРАЦИЯ ---
-# Вставь сюда свой токен от BotFather
-API_TOKEN = '8231565906:AAEPPrr-RlF9-hL8pCvgs2BdWc-gi9XlFZE'
+# --- КОНФИГУРАЦИЯ (ЗАПОЛНИ СВОИМИ ДАННЫМИ) ---
+API_TOKEN = 8231565906:AAEE2Z_xG6RFozWDZ7zrPgzU3-aoh5eN2Uc''
+API_ID = 30654370  # Твой API ID с my.telegram.org
+API_HASH = 'b08726efa334bf4e389213d087472434'
+PHONE = '+79082389429' # Номер твоего аккаунта-спамера
 
-# Данные для Юзербота (my.telegram.org)
-API_ID = 1234567  # Замени на свой
-API_HASH = 'твой_хэш'
-PHONE = '+79991234567' # Твой номер
-
-# ФРАЗЫ
+# Все фразы из твоего списка
 phrases = [
     "ты пидор ебаный нахуй", "я те мать еба шлн вахуй", "я отвожюб маоть пер нахуй",
     "ты пидро кебавнный нищий", "я тво.юмать ебалн ахуй", "ты гей ебанынй чмо нахзуй",
@@ -59,7 +56,7 @@ phrases = [
     "бичукган ебанный уптйо природный", "ты геяка нхайу твоя мать сосала член", "ты пидрон ахуй ебаный у птйо измученый",
     "ты шалваьнахуй еьбананя тварь", "я твою мать ебалн ахйу", "завалавьи ебюанг6нлон еaхуй ты мкерзавец ебаны6нй",
     "тоупй нахй не ной", "ты шлах ебананя цыганка", "я  твою матьебашил нахуй", "ты пмионля меня гнахйу тьы олеьн ебанынй",
-    "ты утпрой гнилой нахйу хач", "ты епидргоас изьеабывйнн", "ты пдиор нхауй прирожденный",
+    "ты утпрой гнилой нахуй хач", "ты епидргоас изьеабывйнн", "ты пдиор нхауй прирожденный",
     "енбали твою матль нахуй ты пидор", "закрой ебалот говноедн ахуй", "ты калловый сын шлюхзи нахуй а ну втапи ебало",
     "обама нгебюанынцй авзали ебалон казуй", "я тек ат ьтуту пмер сперма нахуй емоя", "ты сперма моя тупой ты дикарь",
     "твяома тть нахуй состе члены тут", "ты че защеканец ебснны упйон аухй", "ты избитый ппидорас",
@@ -204,113 +201,97 @@ phrases = [
     "тв чк там сын хуйни", "твою мать потаскуху ебаь", "ты че жирныц сын хуйни соси мне там"
 ]
 
-# Глобальные переменные состояния
-spam_task = None
-calendar_target_id = None
-is_calendar_active = False
-
-# --- ИНИЦИАЛИЗАЦИЯ ---
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher()
 client = TelegramClient('session_railway', API_ID, API_HASH)
 
-# --- ЛОГИКА ЮЗЕРБОТА (SPAM & CALENDAR) ---
+spam_task = None
+is_calendar_active = False
+calendar_target_id = None
 
-async def start_userbot():
-    if not client.is_connected():
-        await client.start(phone=PHONE)
-    print("--- Юзербот запущен! ---")
-
-@client.on(events.NewMessage)
-async def calendar_handler(event):
-    global calendar_target_id, is_calendar_active
-    if is_calendar_active and calendar_target_id:
-        # Проверяем, от того ли человека сообщение (в ЛС или в группе)
-        if event.sender_id == calendar_target_id:
-            phrase = random.choice(phrases)
-            try:
-                await event.reply(phrase)
-                print(f"Calendar: ответил цели {calendar_target_id}")
-            except Exception as e:
-                print(f"Ошибка Calendar: {e}")
-
-# --- ЛОГИКА БОТА (ИНТЕРФЕЙС) ---
-
-def get_main_kb():
-    buttons = [
-        [types.KeyboardButton(text="🚀 Запустить Спам"), types.KeyboardButton(text="📅 Calendar (Авто)")],
-        [types.KeyboardButton(text="🛑 Остановить ВСЁ")]
+# --- ИНТЕРФЕЙС ---
+def main_menu():
+    kb = [
+        [types.KeyboardButton(text="🚀 Старт Спам"), types.KeyboardButton(text="📅 Calendar")],
+        [types.KeyboardButton(text="🛑 Стоп")]
     ]
-    return types.ReplyKeyboardMarkup(keyboard=buttons, resize_keyboard=True)
+    return types.ReplyKeyboardMarkup(keyboard=kb, resize_keyboard=True)
 
 @dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    await message.answer("Управление запущено. Выбери режим:", reply_markup=get_main_kb())
+async def start(message: types.Message):
+    await message.answer("Панель управления. Используй кнопки:", reply_markup=main_menu())
 
-@dp.message(lambda m: m.text == "🚀 Запустить Спам")
-async def ask_spam_target(message: types.Message):
-    await message.answer("Пришли ID чата или @username для спама:")
+@dp.message(lambda m: m.text == "🚀 Старт Спам")
+async def spam_init(message: types.Message):
+    await message.answer("Введи ID чата или @username для спама:")
 
-@dp.message(lambda m: m.text == "📅 Calendar (Авто)")
-async def ask_calendar_target(message: types.Message):
-    await message.answer("Пришли ID цели. Я буду отвечать на каждое его сообщение мгновенно:")
+@dp.message(lambda m: m.text == "📅 Calendar")
+async def calendar_init(message: types.Message):
+    await message.answer("Введи ID жертвы для автоответа:")
 
-@dp.message(lambda m: m.text == "🛑 Остановить ВСЁ")
+@dp.message(lambda m: m.text == "🛑 Стоп")
 async def stop_all(message: types.Message):
     global spam_task, is_calendar_active
     if spam_task:
         spam_task.cancel()
         spam_task = None
     is_calendar_active = False
-    await message.answer("✅ Все процессы остановлены.")
+    await message.answer("Все процессы остановлены.")
 
-async def run_spam_loop(target):
-    try:
-        entity = await client.get_entity(target)
-        while True:
-            await client.send_message(entity, random.choice(phrases))
-            await asyncio.sleep(0.6) # Задержка
-    except Exception as e:
-        print(f"Ошибка цикла спама: {e}")
+# --- ЛОГИКА ЮЗЕРБОТА ---
+async def start_ub():
+    if not client.is_connected():
+        await client.connect()
+    if not await client.is_user_authorized():
+        await client.start(phone=PHONE)
+
+@client.on(events.NewMessage)
+async def on_message(event):
+    global is_calendar_active, calendar_target_id
+    if is_calendar_active and calendar_target_id:
+        if event.sender_id == calendar_target_id:
+            await event.reply(random.choice(phrases))
+
+async def spam_loop(target):
+    while True:
+        try:
+            await client.send_message(target, random.choice(phrases))
+            await asyncio.sleep(0.6)
+        except FloodWaitError as e:
+            await asyncio.sleep(e.seconds)
+        except Exception as e:
+            print(f"Spam Error: {e}")
+            break
 
 @dp.message()
-async def handle_input(message: types.Message):
-    global spam_task, calendar_target_id, is_calendar_active
-    
+async def process_inputs(message: types.Message):
+    global spam_task, is_calendar_active, calendar_target_id
     text = message.text
     if not text: return
 
-    # Если ввели ID/Username после нажатия кнопки
+    # Если это ID или юзернейм
     if text.startswith('-100') or text.startswith('@') or text.isdigit():
-        if not is_calendar_active and not spam_task:
-            # Решаем, что запускать, по контексту последнего сообщения (упрощенно)
-            # Если похоже на ID группы или юзернейм - запускаем спам
-            await message.answer(f"🚀 Запускаю процесс на {text}...")
-            spam_task = asyncio.create_task(run_spam_loop(text))
+        # Если режим спама (упрощенно: если не активен календарь)
+        if not is_calendar_active:
+            await message.answer(f"Запускаю спам в {text}...")
+            if spam_task: spam_task.cancel()
+            spam_task = asyncio.create_task(spam_loop(text))
         else:
-            # Если нажали Calendar
             try:
                 calendar_target_id = int(text) if text.isdigit() else (await client.get_entity(text)).id
                 is_calendar_active = True
-                await message.answer(f"📅 Режим Calendar ВКЛЮЧЕН для {calendar_target_id}")
+                await message.answer(f"Calendar включен для ID {calendar_target_id}")
             except Exception as e:
-                await message.answer(f"Ошибка: {e}")
-
-# --- ЗАПУСК ---
+                await message.answer(f"Ошибка ID: {e}")
 
 async def main():
-    # 1. Принудительный сброс вебхука (РЕШАЕТ ОШИБКУ CONFLICT)
+    # Решаем проблему Conflict
     await bot.delete_webhook(drop_pending_updates=True)
-    
-    # 2. Запуск Юзербота
-    await start_userbot()
-    
-    # 3. Запуск основного бота
-    print("Бот управления в сети!")
+    # Запуск юзербота
+    await start_ub()
+    # Запуск бота
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        print("Бот выключен")
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(main())
